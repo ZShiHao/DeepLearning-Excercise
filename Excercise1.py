@@ -20,7 +20,7 @@ x=np.array([1,2,3])
 print("sigmoid_derivative(x)="+str(sigmoid_derivative(x)))
 
 def image2vector(image):
-    v=image.reshape((image.shape[0]*image.shape[1],image.shape[2]))
+    v=image.reshape((image.shape[0]*image.shape[1]*image.shape[2],1))
     return v
 
 image = np.array([[[ 0.67826139,  0.29380381],
