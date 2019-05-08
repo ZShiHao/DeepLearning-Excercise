@@ -1,18 +1,22 @@
 import numpy as np 
 import h5py
-import matplotlib.pyplot as plt 
-from PIL import Image
-from scipy import ndimage
 from dnn_utils_v2 import *
-from lr_utils import load_dataset
 
-train_set_x_orig, train_set_y, test_set_x_orig, test_set_y, classes = load_dataset()
+def load_data():
+    train_dataset = h5py.File('/Users/zhangshihao/desktop//DL_Week4/datasets/train_catvnoncat.h5', "r")
+    train_set_x_orig = np.array(train_dataset["train_set_x"][:]) # your train set features
+    train_set_y_orig = np.array(train_dataset["train_set_y"][:]) # your train set labels
 
-train_set_x_flatten = train_set_x_orig.reshape(train_set_x_orig.shape[0],-1).T
-test_set_x_flatten = test_set_x_orig.reshape(test_set_x_orig.shape[0],-1).T
+    test_dataset = h5py.File('/Users/zhangshihao/desktop//DL_Week4/datasets/test_catvnoncat.h5', "r")
+    test_set_x_orig = np.array(test_dataset["test_set_x"][:]) # your test set features
+    test_set_y_orig = np.array(test_dataset["test_set_y"][:]) # your test set labels
 
-train_set_x = train_set_x_flatten/255
-test_set_x = test_set_x_flatten/255
+    classes = np.array(test_dataset["list_classes"][:]) # the list of classes
+    
+    train_set_y_orig = train_set_y_orig.reshape((1, train_set_y_orig.shape[0]))
+    test_set_y_orig = test_set_y_orig.reshape((1, test_set_y_orig.shape[0]))
+    
+    return train_set_x_orig, train_set_y_orig, test_set_x_orig, test_set_y_orig, classes
 
 def initialize_parameters(layer_dims):
 	np.random.seed(1)
@@ -27,11 +31,12 @@ def initialize_parameters(layer_dims):
 	return parameters
 
 
-def linear_forward(A,W,b):
+def linear_forward(A_prev,W,b):
 
-	Z=np.dot(W,A)+b
+	#Z=np.dot(W,A_prev)+b
+	Z = W.dot(A_prev) + b
 
-	cache=(A,W,b)
+	cache=(A_prev,W,b)
 
 	return Z,cache
 
@@ -55,10 +60,11 @@ def L_model_forward(X,parameters):
 
 	 for l in range(1,L):
 	 	A_prev = A 
-	 	A,cache=linear_activation_forward(A_prev,parameters["W"+str(l)],parameters["b"+str(l)],"relu")
+	 	A,cache=linear_activation_forward(A_prev,parameters['W'+str(l)],parameters['b'+str(l)],activation="relu")
 	 	caches.append(cache)
 
-	 AL,cache=linear_activation_forward(A,parameters["W"+str(L)],parameters["b"+str(L)],"sigmoid")
+	 AL, cache = linear_activation_forward(A,parameters['W'+str(L)],parameters['b'+str(L)],activation="sigmoid")
+	 caches.append(cache)
 
 	 return AL,caches
 
@@ -99,19 +105,17 @@ def L_model_backward(AL,Y,caches):
 
 	grads = {}
 	L=len(caches)
-	print (L)
 	m=AL.shape[1]
 	Y=Y.reshape(AL.shape)
 
 	dAL = - (np.divide(Y, AL) - np.divide(1 - Y, 1 - AL))
 
 	current_cache = caches[L-1]
-	grads["dA"+str(L-1)],grads["dW"+str(L)],grads["db"+str(L)]=linear_activation_backward(dAL,current_cache,"sigmoid")
+	grads["dA"+str(L-1)],grads["dW"+str(L)],grads["db"+str(L)]=linear_activation_backward(dAL,current_cache,activation="sigmoid")
 
 	for l in reversed(range(L-1)):
-		print (l)
 		current_cache=caches[l]
-		dA_prev_temp, dW_temp, db_temp = linear_activation_backward(grads["dA"+str(l+1)],current_cache,"relu")
+		dA_prev_temp, dW_temp, db_temp = linear_activation_backward(grads["dA"+str(l+1)],current_cache,activation="relu")
 		grads["dA"+str(l)]=dA_prev_temp
 		grads["dW"+str(l+1)]=dW_temp
 		grads["db"+str(l+1)]=db_temp
@@ -149,12 +153,28 @@ def L_layer_model(X,Y,layer_dims,learning_rate=0.0075,num_iterations=3000,print_
 
 	return parameters
 
+def predict(X, Y, parameters,datasets="train"):
 
-layer_dims = [12288, 20, 7, 5, 1]
+    # Forward propagation
+    AL, caches = L_model_forward(X, parameters)
+    predictions= (AL>0.5)
+    
+    if datasets == "train":
+        print("Train Accuracy: {}% ".format(100-np.mean(np.abs(predictions-Y))*100))
+    elif datasets == "test":
+        print("Test Accuracy: {}%".format(100-np.mean(np.abs(predictions-Y))*100))
 
-parameters = L_layer_model(train_set_x, train_set_y, layer_dims, num_iterations = 2500, print_cost = True)
+    return predictions
 
-pred_train = predict(train_set_x,train_set_y, parameters)
-pred_test = predict(test_set_x, test_set_y, parameters)
+train_x_orig, train_y, test_x_orig, test_y, classes = load_data()
+train_x_flatten = train_x_orig.reshape(train_x_orig.shape[0], -1).T   # The "-1" makes reshape flatten the remaining dimensions
+test_x_flatten = test_x_orig.reshape(test_x_orig.shape[0], -1).T
 
+# Standardize data to have feature values between 0 and 1.
+train_x = train_x_flatten/255.
+test_x = test_x_flatten/255.
 
+layer_dims = [12288, 10, 5, 1]
+parameters = L_layer_model(train_x, train_y, layer_dims,learning_rate=0.01,num_iterations =2000, print_cost = True)
+pred_train = predict(train_x, train_y, parameters,"train")
+pred_test = predict(test_x, test_y, parameters,"test")
